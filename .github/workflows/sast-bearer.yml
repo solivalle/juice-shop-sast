@@ -28,6 +28,7 @@ jobs: # Define los trabajos del pipeline.
           docker run --rm \
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
+            --user "$(id -u):$(id -g)" \
             ghcr.io/bearer/bearer:latest \
             scan . \
             --report security \
@@ -41,6 +42,7 @@ jobs: # Define los trabajos del pipeline.
           docker run --rm \
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
+            --user "$(id -u):$(id -g)" \
             ghcr.io/bearer/bearer:latest \
             scan . \
             --report security \

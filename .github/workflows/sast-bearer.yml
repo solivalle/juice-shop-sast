@@ -1,0 +1,60 @@
+name: Bearer SAST # Nombre del workflow para identificar el análisis de seguridad en GitHub Actions.
+on: # Define los eventos que disparan la ejecución del workflow.
+  push: # Se ejecuta cuando se empuja código a la rama principal.
+    branches: [ main ] # Solo se activa en la rama main.
+  pull_request: # Se ejecuta cuando se abre o actualiza un pull request hacia main.
+    branches: [ main ] # Solo se activa para pull requests dirigidos a main.
+  workflow_dispatch: # Permite lanzar el análisis manualmente desde la pestaña Actions.
+
+permissions: # Define los permisos mínimos necesarios para leer el código y publicar resultados de seguridad.
+  contents: read # Solo permite leer el contenido del repositorio para el escaneo.
+  security-events: write # Permite subir resultados SARIF a Code Scanning de GitHub.
+
+jobs: # Define los trabajos del pipeline.
+  bearer-scan: # Nombre del trabajo principal de escaneo de seguridad.
+    runs-on: ubuntu-latest # Ejecuta el análisis en un runner Linux estándar de GitHub.
+    steps: # Define la secuencia de tareas del trabajo.
+      - name: Checkout repository # Descarga el código del repositorio para analizarlo.
+        uses: actions/checkout@v4 # Acción oficial para clonar el repositorio dentro del runner.
+
+      - name: Prepare output directory # Crea la carpeta donde se guardarán los reportes del análisis.
+        run: mkdir -p reportes # Crea el directorio reportes en la raíz del repositorio.
+
+      - name: Run Bearer SARIF scan # Ejecuta Bearer para generar un reporte SARIF para Code Scanning.
+        id: bearer_sarif # Asigna un identificador para referenciar el resultado del paso.
+        continue-on-error: true # Permite que el workflow continúe aunque Bearer encuentre vulnerabilidades.
+        run: | # Inicia el bloque de comandos del escaneo.
+          docker run --rm \ # Ejecuta el contenedor Bearer sin conservar el contenedor tras terminar.
+            -v "${{ github.workspace }}:/workspace" \ # Monta el repositorio dentro del contenedor para escanearlo.
+            -w /workspace \ # Establece la carpeta de trabajo dentro del contenedor.
+            ghcr.io/bearer/bearer:latest \ # Usa la imagen oficial de Bearer desde GitHub Container Registry.
+            scan . \ # Escanea todo el contenido del repositorio actual.
+            --report security \ # Genera el reporte de seguridad predeterminado.
+            --format sarif \ # Genera el formato SARIF requerido por GitHub Code Scanning.
+            --output /workspace/reportes/bearer-report.sarif # Guarda el archivo SARIF en la carpeta reportes.
+
+      - name: Run Bearer HTML scan # Ejecuta Bearer otra vez para generar un HTML legible y descargable.
+        continue-on-error: true # Permite continuar aunque el escaneo detecte problemas de seguridad.
+        run: | # Inicia el bloque del segundo análisis.
+          docker run --rm \ # Ejecuta nuevamente el contenedor Bearer.
+            -v "${{ github.workspace }}:/workspace" \ # Monta el repositorio para que Bearer lo escanee.
+            -w /workspace \ # Usa el directorio del repositorio como punto de trabajo.
+            ghcr.io/bearer/bearer:latest \ # Utiliza la imagen oficial de Bearer.
+            scan . \ # Analiza todo el código del repositorio.
+            --report security \ # Genera un reporte de seguridad.
+            --format html \ # Guarda el reporte en formato HTML.
+            --output /workspace/reportes/bearer-report.html # Guarda el archivo HTML en la carpeta reportes.
+
+      - name: Upload SARIF to GitHub code scanning # Sube el resultado SARIF a Security > Code scanning.
+        if: always() # Ejecuta este paso aunque el escaneo haya encontrado vulnerabilidades o haya fallado.
+        uses: github/codeql-action/upload-sarif@v3 # Acción oficial para publicar informes SARIF en GitHub.
+        with: # Pasa parámetros a la acción de subida.
+          sarif_file: reportes/bearer-report.sarif # Indica la ruta del archivo SARIF generado por Bearer.
+          category: bearer-sast # Asigna una categoría para distinguir el análisis de Bearer.
+
+      - name: Upload HTML artifact # Guarda el HTML como artefacto descargable del workflow.
+        if: always() # También se ejecuta aunque haya hallazgos de seguridad.
+        uses: actions/upload-artifact@v4 # Acción oficial para subir artefactos del workflow.
+        with: # Define el contenido del artefacto.
+          name: bearer-html-report # Nombre del artefacto descargable.
+          path: reportes/bearer-report.html # Ruta del archivo HTML a publicar como artefacto.

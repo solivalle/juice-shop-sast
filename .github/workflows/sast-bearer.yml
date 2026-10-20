@@ -24,26 +24,28 @@ jobs: # Define los trabajos del pipeline.
         id: bearer_sarif # Asigna un identificador para referenciar el resultado del paso.
         continue-on-error: true # Permite que el workflow continúe aunque Bearer encuentre vulnerabilidades.
         run: | # Inicia el bloque de comandos del escaneo.
-          docker run --rm \ # Ejecuta el contenedor Bearer sin conservar el contenedor tras terminar.
-            -v "${{ github.workspace }}:/workspace" \ # Monta el repositorio dentro del contenedor para escanearlo.
-            -w /workspace \ # Establece la carpeta de trabajo dentro del contenedor.
-            ghcr.io/bearer/bearer:latest \ # Usa la imagen oficial de Bearer desde GitHub Container Registry.
-            scan . \ # Escanea todo el contenido del repositorio actual.
-            --report security \ # Genera el reporte de seguridad predeterminado.
-            --format sarif \ # Genera el formato SARIF requerido por GitHub Code Scanning.
-            --output /workspace/reportes/bearer-report.sarif # Guarda el archivo SARIF en la carpeta reportes.
+          # Ejecuta el contenedor Bearer sin conservar el contenedor tras terminar.
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace \
+            ghcr.io/bearer/bearer:latest \
+            scan . \
+            --report security \
+            --format sarif \
+            --output /workspace/reportes/bearer-report.sarif
 
       - name: Run Bearer HTML scan # Ejecuta Bearer otra vez para generar un HTML legible y descargable.
         continue-on-error: true # Permite continuar aunque el escaneo detecte problemas de seguridad.
         run: | # Inicia el bloque del segundo análisis.
-          docker run --rm \ # Ejecuta nuevamente el contenedor Bearer.
-            -v "${{ github.workspace }}:/workspace" \ # Monta el repositorio para que Bearer lo escanee.
-            -w /workspace \ # Usa el directorio del repositorio como punto de trabajo.
-            ghcr.io/bearer/bearer:latest \ # Utiliza la imagen oficial de Bearer.
-            scan . \ # Analiza todo el código del repositorio.
-            --report security \ # Genera un reporte de seguridad.
-            --format html \ # Guarda el reporte en formato HTML.
-            --output /workspace/reportes/bearer-report.html # Guarda el archivo HTML en la carpeta reportes.
+          # Ejecuta nuevamente el contenedor Bearer para producir el reporte HTML.
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace \
+            ghcr.io/bearer/bearer:latest \
+            scan . \
+            --report security \
+            --format html \
+            --output /workspace/reportes/bearer-report.html
 
       - name: Upload SARIF to GitHub code scanning # Sube el resultado SARIF a Security > Code scanning.
         if: always() # Ejecuta este paso aunque el escaneo haya encontrado vulnerabilidades o haya fallado.
